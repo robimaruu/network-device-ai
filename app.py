@@ -41,11 +41,10 @@ def load_tflite_model():
     labels_path = 'labels.txt'
 
     if not os.path.exists(model_path):
-        raise FileNotFoundError(f"File '{model_path}' tidak ditemukan di lokasi repositori. Pastikan file model bernama 'model.tflite'!")
+        raise FileNotFoundError(f"File '{model_path}' tidak ditemukan di lokasi repositori.")
     if not os.path.exists(labels_path):
         raise FileNotFoundError(f"File '{labels_path}' tidak ditemukan di lokasi repositori.")
 
-    # Menggunakan tf.lite.Interpreter resmi dari TensorFlow
     interpreter = tf.lite.Interpreter(model_path=model_path)
     interpreter.allocate_tensors()
 
@@ -99,4 +98,7 @@ try:
             info = DEVICE_INFO[detected_label]
             st.markdown(f"**💡 Fungsi Utama:**\n{info['fungsi']}")
             st.markdown(f"**🔍 Ciri Fisik:**\n{info['ciri']}")
-            st.markdown(f"**🛠️ Tips Penggunaan:**\n{info['
+            st.markdown(f"**🛠️ Tips Penggunaan:**\n{info['tips']}")
+
+except Exception as e:
+    st.error(f"⚠️ Detail Pesan Kesalahan: {e}")
