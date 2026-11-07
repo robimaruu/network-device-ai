@@ -1,13 +1,8 @@
 import streamlit as st
 from PIL import Image, ImageOps
 import numpy as np
+import tensorflow as tf
 import os
-
-# Import TFLite interpreter
-try:
-    import tflite_runtime.interpreter as tflite
-except ImportError:
-    import tensorflow.lite as tflite
 
 # 1. Konfigurasi Halaman Web
 st.set_page_config(page_title="AI Network Device Recognition", page_icon="🌐", layout="centered")
@@ -39,7 +34,7 @@ DEVICE_INFO = {
     }
 }
 
-# 3. Loader Model TFLite
+# 3. Loader Model TFLite Bawaan TensorFlow
 @st.cache_resource
 def load_tflite_model():
     model_path = 'model.tflite'
@@ -50,7 +45,8 @@ def load_tflite_model():
     if not os.path.exists(labels_path):
         raise FileNotFoundError(f"File '{labels_path}' tidak ditemukan di lokasi repositori.")
 
-    interpreter = tflite.Interpreter(model_path=model_path)
+    # Menggunakan tf.lite.Interpreter resmi dari TensorFlow
+    interpreter = tf.lite.Interpreter(model_path=model_path)
     interpreter.allocate_tensors()
 
     with open(labels_path, 'r', encoding='utf-8') as f:
