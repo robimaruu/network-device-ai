@@ -10,7 +10,7 @@ st.set_page_config(page_title="AI Network Device Recognition", page_icon="🌐",
 st.title("🌐 AI Network Device Recognition")
 st.write("Arahkan kamera HP atau unggah foto untuk mengenali jenis dan fungsi alat jaringan komputer.")
 
-# 2. Dictionary Deskripsi Perangkat Jaringan
+# 2. Dictionary Deskripsi Perangkat Jaringan (Sudah ditambahkan Laptop)
 DEVICE_INFO = {
     "Router": {
         "fungsi": "Menghubungkan dua atau lebih jaringan yang berbeda (misalnya menghubungkan jaringan LAN rumah ke jaringan Internet).",
@@ -31,6 +31,11 @@ DEVICE_INFO = {
         "fungsi": "Konektor fisik yang dipasang di ujung kabel UTP untuk dicolokkan ke port LAN komputer atau router.",
         "ciri": "Terbuat dari plastik bening dengan 8 pin tembaga di dalamnya.",
         "tips": "Gunakan tang crimping dan pastikan urutan warna kabel (T568A/T568B) sudah pas."
+    },
+    "Laptop": {
+        "fungsi": "Komputer portabel yang berfungsi sebagai perangkat klien (host) dalam jaringan untuk mengakses atau mengonfigurasi perangkat jaringan lain.",
+        "ciri": "Memiliki layar lipat, papan ketik (keyboard), serta port LAN (Ethernet) atau kartu Wi-Fi internal.",
+        "tips": "Gunakan perintah 'ipconfig' di Command Prompt untuk memeriksa IP Address dan konektivitas jaringan."
     }
 }
 
