@@ -1,8 +1,8 @@
 import streamlit as st
 from PIL import Image, ImageOps
 import numpy as np
-import tensorflow as tf
 import os
+from teachablemachine import TeachableMachine
 
 # 1. Konfigurasi Halaman Web
 st.set_page_config(page_title="AI Network Device Recognition", page_icon="🌐", layout="centered")
@@ -34,14 +34,7 @@ DEVICE_INFO = {
     }
 }
 
-# 3. Handling Bug DepthwiseConv2D Keras
-class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
-    def __init__(self, *args, **kwargs):
-        if 'groups' in kwargs:
-            del kwargs['groups']
-        super().__init__(*args, **kwargs)
-
-# 4. Loader Model Khusus Teachable Machine
+# 3. Loader Model Menggunakan TeachableMachine Wrapper
 @st.cache_resource
 def load_ai_model():
     model_path = 'keras_model.h5'
@@ -52,51 +45,40 @@ def load_ai_model():
     if not os.path.exists(labels_path):
         raise FileNotFoundError(f"File '{labels_path}' tidak ditemukan di lokasi repositori.")
 
-    custom_objects = {'DepthwiseConv2D': FixedDepthwiseConv2D}
-    
-    # Load model tanpa kompilasi agar terhindar dari konflik arsitektur Sequential
-    model = tf.keras.models.load_model(model_path, custom_objects=custom_objects, compile=False)
-    
-    with open(labels_path, 'r', encoding='utf-8') as f:
-        class_names = [line.strip() for line in f.readlines()]
-        
-    return model, class_names
+    # Inisialisasi Teachable Machine Classifier
+    model = TeachableMachine(model_path=model_path, labels_file_path=labels_path)
+    return model
 
 try:
-    model, class_names = load_ai_model()
+    model = load_ai_model()
     
-    # 5. Input Gambar (Camera/Upload)
+    # 4. Input Gambar (Camera/Upload)
     st.subheader("📷 Ambil Gambar / Unggah File")
-    camera_img = st.camera_input("Ambil Foto Langsung dari Kamera")
+    camera_img = st.camera_input("Ambil Foto Langsung dari Kamera HP")
     file_img = st.file_uploader("Atau Upload Foto dari Galeri", type=["jpg", "png", "jpeg"])
 
     target_image = camera_img if camera_img is not None else file_img
 
     if target_image is not None:
+        # Simpan sementara gambar untuk diklasifikasikan
         image = Image.open(target_image).convert('RGB')
         st.image(image, caption='Gambar Perangkat yang Diuji', use_container_width=True)
         
-        # Preprocessing Gambar sesuai spesifikasi Teachable Machine (224x224, Normalized -1 to 1)
-        size = (224, 224)
-        image_resized = ImageOps.fit(image, size, Image.Resampling.LANCZOS)
-        image_array = np.asarray(image_resized)
-        normalized_image_array = (image_array.astype(np.float32) / 127.5) - 1.0
-        data = np.expand_dims(normalized_image_array, axis=0)
+        temp_img_path = "temp_input.jpg"
+        image.save(temp_img_path)
 
-        # Prediksi AI dengan Penanganan Input Tensor
+        # Prediksi AI via Teachable Machine
         with st.spinner('Menganalisis perangkat...'):
-            try:
-                # Coba cara prediksi standar
-                prediction = model.predict(data, verbose=0)
-            except Exception:
-                # Jalankan panggilan model langsung jika Sequential.call() mengalami konflik tensor
-                prediction = model(data, training=False).numpy()
-
-            index = np.argmax(prediction[0])
+            result = model.classify_image(temp_img_path)
             
-            raw_class_name = class_names[index]
+            raw_class_name = result['class_name']
+            # Ambil label murni (menghilangkan angka indeks seperti "0 Router" -> "Router")
             detected_label = raw_class_name.split(' ', 1)[-1] if ' ' in raw_class_name else raw_class_name
-            confidence_score = float(prediction[0][index]) * 100
+            confidence_score = float(result['class_confidence']) * 100
+
+        # Hapus file sementara
+        if os.path.exists(temp_img_path):
+            os.remove(temp_img_path)
 
         # Tampilkan Hasil Analisis
         st.divider()
@@ -110,8 +92,7 @@ try:
             st.markdown(f"**🔍 Ciri Fisik:**\n{info['ciri']}")
             st.markdown(f"**🛠️ Tips Penggunaan:**\n{info['tips']}")
         else:
-            # Fallback jika nama kelas di Teachable Machine beda penulisan
-            st.warning("Penjelasan fungsi belum terhubung. Pastikan nama kelas di Teachable Machine sama dengan nama perangkat.")
+            st.warning(f"Penjelasan untuk '{detected_label}' belum dikonfigurasi di DEVICE_INFO.")
 
 except Exception as e:
     st.error(f"⚠️ Detail Pesan Kesalahan: {e}")
