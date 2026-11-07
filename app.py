@@ -1,10 +1,8 @@
 import streamlit as st
 from PIL import Image, ImageOps
 import numpy as np
+import tensorflow as tf
 import os
-
-# Gunakan tf_keras untuk kompatibilitas model Teachable Machine
-import tf_keras as keras
 
 # 1. Konfigurasi Halaman
 st.set_page_config(page_title="AI Network Device Recognition", page_icon="🌐", layout="centered")
@@ -36,7 +34,14 @@ DEVICE_INFO = {
     }
 }
 
-# 3. Fungsi Load Model AI
+# 3. Custom DepthwiseConv2D untuk mengatasi bug Keras/Teachable Machine
+class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
+    def __init__(self, *args, **kwargs):
+        if 'groups' in kwargs:
+            del kwargs['groups']
+        super().__init__(*args, **kwargs)
+
+# 4. Fungsi Load Model AI (Universal Loader)
 @st.cache_resource
 def load_ai_model():
     model_path = 'keras_model.h5'
@@ -47,8 +52,9 @@ def load_ai_model():
     if not os.path.exists(labels_path):
         raise FileNotFoundError(f"File '{labels_path}' tidak ditemukan di lokasi repositori.")
 
-    # Menggunakan tf_keras.models.load_model
-    model = keras.models.load_model(model_path, compile=False)
+    # Load model menggunakan custom objects agar tidak crash pada DepthwiseConv2D
+    custom_objects = {'DepthwiseConv2D': FixedDepthwiseConv2D}
+    model = tf.keras.models.load_model(model_path, custom_objects=custom_objects, compile=False)
     
     with open(labels_path, 'r', encoding='utf-8') as f:
         class_names = [line.strip() for line in f.readlines()]
@@ -58,7 +64,7 @@ def load_ai_model():
 try:
     model, class_names = load_ai_model()
     
-    # 4. Input Gambar (Camera/Upload)
+    # 5. Input Gambar (Camera/Upload)
     st.subheader("📷 Ambil Gambar / Unggah File")
     camera_img = st.camera_input("Ambil Foto Langsung dari Kamera")
     file_img = st.file_uploader("Atau Upload Foto dari Galeri", type=["jpg", "png", "jpeg"])
