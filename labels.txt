@@ -1,4 +1,0 @@
-0 Router
-1 Switch
-2 Access Point
-3 Konektor RJ45
