@@ -2,6 +2,7 @@ import streamlit as st
 from PIL import Image, ImageOps
 import numpy as np
 import tensorflow as tf
+import os
 
 # 1. Konfigurasi Halaman
 st.set_page_config(page_title="AI Network Device Recognition", page_icon="🌐", layout="centered")
@@ -33,11 +34,22 @@ DEVICE_INFO = {
     }
 }
 
-# 3. Fungsi Load Model AI
+# 3. Fungsi Load Model AI (Dibuat Lebih Aman untuk Cloud)
 @st.cache_resource
 def load_ai_model():
-    model = tf.keras.models.load_model('keras_model.h5', compile=False)
-    class_names = [line.strip() for line in open('labels.txt', 'r').readlines()]
+    model_path = 'keras_model.h5'
+    labels_path = 'labels.txt'
+
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"File '{model_path}' tidak ditemukan di lokasi repositori.")
+    if not os.path.exists(labels_path):
+        raise FileNotFoundError(f"File '{labels_path}' tidak ditemukan di lokasi repositori.")
+
+    model = tf.keras.models.load_model(model_path, compile=False)
+    
+    with open(labels_path, 'r', encoding='utf-8') as f:
+        class_names = [line.strip() for line in f.readlines()]
+        
     return model, class_names
 
 try:
@@ -67,7 +79,6 @@ try:
             prediction = model.predict(data)
             index = np.argmax(prediction)
             
-            # Mengambil nama kelas (menghilangkan angka indeks dari Teachable Machine jika ada)
             raw_class_name = class_names[index]
             detected_label = raw_class_name.split(' ', 1)[-1] if ' ' in raw_class_name else raw_class_name
             confidence_score = float(prediction[0][index]) * 100
@@ -85,4 +96,4 @@ try:
             st.markdown(f"**🛠️ Tips Penggunaan:**\n{info['tips']}")
 
 except Exception as e:
-    st.error("⚠️ Terjadi kesalahan saat memuat berkas model. Pastikan 'keras_model.h5' dan 'labels.txt' sudah ada di folder proyek!")
+    st.error(f"⚠️ Detail Pesan Kesalahan: {e}")
