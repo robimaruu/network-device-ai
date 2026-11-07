@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 import os
 
-# 1. Konfigurasi Halaman
+# 1. Konfigurasi Halaman Web
 st.set_page_config(page_title="AI Network Device Recognition", page_icon="🌐", layout="centered")
 
 st.title("🌐 AI Network Device Recognition")
@@ -34,14 +34,14 @@ DEVICE_INFO = {
     }
 }
 
-# 3. Custom DepthwiseConv2D untuk mengatasi bug Keras/Teachable Machine
+# 3. Handling Bug DepthwiseConv2D Keras
 class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
     def __init__(self, *args, **kwargs):
         if 'groups' in kwargs:
             del kwargs['groups']
         super().__init__(*args, **kwargs)
 
-# 4. Fungsi Load Model AI (Universal Loader)
+# 4. Loader Model Khusus Teachable Machine
 @st.cache_resource
 def load_ai_model():
     model_path = 'keras_model.h5'
@@ -52,8 +52,9 @@ def load_ai_model():
     if not os.path.exists(labels_path):
         raise FileNotFoundError(f"File '{labels_path}' tidak ditemukan di lokasi repositori.")
 
-    # Load model menggunakan custom objects agar tidak crash pada DepthwiseConv2D
     custom_objects = {'DepthwiseConv2D': FixedDepthwiseConv2D}
+    
+    # Load model tanpa kompilasi agar terhindar dari konflik arsitektur Sequential
     model = tf.keras.models.load_model(model_path, custom_objects=custom_objects, compile=False)
     
     with open(labels_path, 'r', encoding='utf-8') as f:
@@ -75,18 +76,23 @@ try:
         image = Image.open(target_image).convert('RGB')
         st.image(image, caption='Gambar Perangkat yang Diuji', use_container_width=True)
         
-        # Preprocessing Gambar untuk Model
+        # Preprocessing Gambar sesuai spesifikasi Teachable Machine (224x224, Normalized -1 to 1)
         size = (224, 224)
         image_resized = ImageOps.fit(image, size, Image.Resampling.LANCZOS)
         image_array = np.asarray(image_resized)
-        normalized_image_array = (image_array.astype(np.float32) / 127.5) - 1
-        data = np.ndarray(shape=(1, 224, 224, 3), dtype=np.float32)
-        data[0] = normalized_image_array
+        normalized_image_array = (image_array.astype(np.float32) / 127.5) - 1.0
+        data = np.expand_dims(normalized_image_array, axis=0)
 
-        # Prediksi AI
+        # Prediksi AI dengan Penanganan Input Tensor
         with st.spinner('Menganalisis perangkat...'):
-            prediction = model.predict(data)
-            index = np.argmax(prediction)
+            try:
+                # Coba cara prediksi standar
+                prediction = model.predict(data, verbose=0)
+            except Exception:
+                # Jalankan panggilan model langsung jika Sequential.call() mengalami konflik tensor
+                prediction = model(data, training=False).numpy()
+
+            index = np.argmax(prediction[0])
             
             raw_class_name = class_names[index]
             detected_label = raw_class_name.split(' ', 1)[-1] if ' ' in raw_class_name else raw_class_name
@@ -103,6 +109,9 @@ try:
             st.markdown(f"**💡 Fungsi Utama:**\n{info['fungsi']}")
             st.markdown(f"**🔍 Ciri Fisik:**\n{info['ciri']}")
             st.markdown(f"**🛠️ Tips Penggunaan:**\n{info['tips']}")
+        else:
+            # Fallback jika nama kelas di Teachable Machine beda penulisan
+            st.warning("Penjelasan fungsi belum terhubung. Pastikan nama kelas di Teachable Machine sama dengan nama perangkat.")
 
 except Exception as e:
     st.error(f"⚠️ Detail Pesan Kesalahan: {e}")
