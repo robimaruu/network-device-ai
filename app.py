@@ -2,7 +2,12 @@ import streamlit as st
 from PIL import Image, ImageOps
 import numpy as np
 import os
-from teachablemachine import TeachableMachine
+
+# Import TFLite interpreter
+try:
+    import tflite_runtime.interpreter as tflite
+except ImportError:
+    import tensorflow.lite as tflite
 
 # 1. Konfigurasi Halaman Web
 st.set_page_config(page_title="AI Network Device Recognition", page_icon="🌐", layout="centered")
@@ -34,10 +39,10 @@ DEVICE_INFO = {
     }
 }
 
-# 3. Loader Model Menggunakan TeachableMachine Wrapper
+# 3. Loader Model TFLite
 @st.cache_resource
-def load_ai_model():
-    model_path = 'keras_model.h5'
+def load_tflite_model():
+    model_path = 'model.tflite'
     labels_path = 'labels.txt'
 
     if not os.path.exists(model_path):
@@ -45,12 +50,16 @@ def load_ai_model():
     if not os.path.exists(labels_path):
         raise FileNotFoundError(f"File '{labels_path}' tidak ditemukan di lokasi repositori.")
 
-    # Inisialisasi Teachable Machine Classifier
-    model = TeachableMachine(model_path=model_path, labels_file_path=labels_path)
-    return model
+    interpreter = tflite.Interpreter(model_path=model_path)
+    interpreter.allocate_tensors()
+
+    with open(labels_path, 'r', encoding='utf-8') as f:
+        class_names = [line.strip() for line in f.readlines()]
+
+    return interpreter, class_names
 
 try:
-    model = load_ai_model()
+    interpreter, class_names = load_tflite_model()
     
     # 4. Input Gambar (Camera/Upload)
     st.subheader("📷 Ambil Gambar / Unggah File")
@@ -60,25 +69,29 @@ try:
     target_image = camera_img if camera_img is not None else file_img
 
     if target_image is not None:
-        # Simpan sementara gambar untuk diklasifikasikan
         image = Image.open(target_image).convert('RGB')
         st.image(image, caption='Gambar Perangkat yang Diuji', use_container_width=True)
-        
-        temp_img_path = "temp_input.jpg"
-        image.save(temp_img_path)
 
-        # Prediksi AI via Teachable Machine
+        # Preprocessing Gambar untuk TFLite (224x224, Normalisasi -1 s.d. 1)
+        size = (224, 224)
+        image_resized = ImageOps.fit(image, size, Image.Resampling.LANCZOS)
+        image_array = np.asarray(image_resized)
+        normalized_image_array = (image_array.astype(np.float32) / 127.5) - 1.0
+        input_data = np.expand_dims(normalized_image_array, axis=0)
+
+        # Prediksi AI Menggunakan TFLite
         with st.spinner('Menganalisis perangkat...'):
-            result = model.classify_image(temp_img_path)
-            
-            raw_class_name = result['class_name']
-            # Ambil label murni (menghilangkan angka indeks seperti "0 Router" -> "Router")
-            detected_label = raw_class_name.split(' ', 1)[-1] if ' ' in raw_class_name else raw_class_name
-            confidence_score = float(result['class_confidence']) * 100
+            input_details = interpreter.get_input_details()
+            output_details = interpreter.get_output_details()
 
-        # Hapus file sementara
-        if os.path.exists(temp_img_path):
-            os.remove(temp_img_path)
+            interpreter.set_tensor(input_details[0]['index'], input_data)
+            interpreter.invoke()
+            output_data = interpreter.get_tensor(output_details[0]['index'])
+
+            index = np.argmax(output_data[0])
+            raw_class_name = class_names[index]
+            detected_label = raw_class_name.split(' ', 1)[-1] if ' ' in raw_class_name else raw_class_name
+            confidence_score = float(output_data[0][index]) * 100
 
         # Tampilkan Hasil Analisis
         st.divider()
@@ -91,8 +104,6 @@ try:
             st.markdown(f"**💡 Fungsi Utama:**\n{info['fungsi']}")
             st.markdown(f"**🔍 Ciri Fisik:**\n{info['ciri']}")
             st.markdown(f"**🛠️ Tips Penggunaan:**\n{info['tips']}")
-        else:
-            st.warning(f"Penjelasan untuk '{detected_label}' belum dikonfigurasi di DEVICE_INFO.")
 
 except Exception as e:
     st.error(f"⚠️ Detail Pesan Kesalahan: {e}")
