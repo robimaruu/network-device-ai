@@ -1,8 +1,10 @@
 import streamlit as st
 from PIL import Image, ImageOps
 import numpy as np
-import tensorflow as tf
 import os
+
+# Gunakan tf_keras untuk kompatibilitas model Teachable Machine
+import tf_keras as keras
 
 # 1. Konfigurasi Halaman
 st.set_page_config(page_title="AI Network Device Recognition", page_icon="🌐", layout="centered")
@@ -34,7 +36,7 @@ DEVICE_INFO = {
     }
 }
 
-# 3. Fungsi Load Model AI (Dibuat Lebih Aman untuk Cloud)
+# 3. Fungsi Load Model AI
 @st.cache_resource
 def load_ai_model():
     model_path = 'keras_model.h5'
@@ -45,7 +47,8 @@ def load_ai_model():
     if not os.path.exists(labels_path):
         raise FileNotFoundError(f"File '{labels_path}' tidak ditemukan di lokasi repositori.")
 
-    model = tf.keras.models.load_model(model_path, compile=False)
+    # Menggunakan tf_keras.models.load_model
+    model = keras.models.load_model(model_path, compile=False)
     
     with open(labels_path, 'r', encoding='utf-8') as f:
         class_names = [line.strip() for line in f.readlines()]
